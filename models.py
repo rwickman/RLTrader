@@ -1,9 +1,97 @@
 import torch
 import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+import os
+
+from replay_memory import ReplayMemory
 
 # class Critic(nn.Module)
 
-class Trader(nn.Module):
+class DDQNAgent:
+    def __init__(self, args):
+        self.args = args
+        self._dqn = DQN(self.args).cuda()
+        self._dqn_target = DQN(self.args).cuda()
+        self._replay_memory = ReplayMemory(self.args)
+        self._optimizer = optim.Adam(self._dqn.parameters(), lr=self.args.lr)
+        self._loss_fn = nn.SmoothL1Loss()
+        self._num_steps = 0
+        self._action_dim = self.args.max_trans * 2 + 1
+
+    def __call__(self, x):
+        return self.get_action(self._dqn(x))
+
+    def get_action(self, q_values, argmax=False):
+        q_values = torch.squeeze(q_values)
+        if not argmax and self.args.epsilon >= np.random.rand():
+            # Perform random action
+            action = np.random.randint(self._action_dim)
+        else:
+            with torch.no_grad():
+                # Perform action that maximizes expected return
+                action =  q_values.max(0)[1]
+        action = int(action)
+        return action, q_values[action]
+
+    def add_ex(self, e_t):
+        """Add a step of experience."""
+        self._replay_memory.append(e_t)
+
+    def train(self):
+        exs = self._replay_memory.sample()
+
+        td_targets = torch.zeros(self.args.batch_size).cuda()
+        states = torch.zeros(self.args.batch_size, self.args.lstm_timesteps, self.args.state_size).cuda()
+        next_states = torch.zeros(self.args.batch_size, self.args.lstm_timesteps, self.args.state_size).cuda()
+        rewards = torch.zeros(self.args.batch_size)
+        next_state_mask = torch.zeros(self.args.batch_size)
+        actions = []
+
+        # Create state-action values
+        for i, e_t in enumerate(exs):
+            states[i] = e_t.state
+            actions.append(e_t.action)
+            rewards[i] = e_t.reward
+            
+            # Check if next state exists
+            if e_t.next_state is not None:
+                next_states[i] = e_t.next_state 
+                next_state_mask[i] = 1
+        
+        # Select the q-value for every state
+        actions = torch.tensor(actions, dtype=torch.int64).cuda()
+        print(actions.shape)
+        q_values = self._dqn(states).gather(1, actions.unsqueeze(0))
+
+        # Create TD targets
+        q_next  = self._dqn(next_states)
+        q_next_target  = self._dqn_target(next_states)
+        for i in range(self.args.batch_size):
+            if next_state_mask[i] == 0:
+                td_targets[i] = rewards[i]
+            else:
+                # Get the argmax next action for DQN
+                action, _ = self.get_action(q_next[i], True)
+                
+                # Set TD Target using the q-value of the target network
+                td_targets[i] = rewards[i] + self.args.gamma * q_next_target[i, action]
+
+        # Train model
+        self._optimizer.zero_grad()
+        print("q_values.shape", q_values.shape)
+        print("td_targets.shape", td_targets.shape)
+        loss = self._loss_fn(q_values[0], td_targets)
+        
+        loss.backward()
+        print(self._dqn.q_values.weight.grad.max())
+        self._optimizer.step()
+        self._num_steps += 1
+
+    def update_target(self):
+        self._dqn_target.load_state_dict(self._dqn.state_dict())
+
+class DQN(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.args = args
@@ -13,14 +101,18 @@ class Trader(nn.Module):
         self.lstm_cell = nn.LSTMCell(self.state_size, self.args.hidden_size)
 
         # Action space is [-max_trans, max_trans]
-        self.agent_out = nn.Linear(self.args.hidden_size, self.args.max_trans * 2 + 1)
+        self.q_values = nn.Linear(self.args.hidden_size, self.args.max_trans * 2 + 1)
+
+        #self.critic_out = nn.Linear(self.args.hidden_size, 1)
 
     def forward(self, states):
+
+        batch_size = states.shape[0]
         # Hidden state and cell memory
-        h_t = torch.zeros(1, self.args.hidden_size).cuda()
-        c_t = torch.zeros(1, self.args.hidden_size).cuda()
+        h_t = torch.zeros(batch_size, self.args.hidden_size).cuda()
+        c_t = torch.zeros(batch_size, self.args.hidden_size).cuda()
         for i in range(self.args.lstm_timesteps):
-            h_t, c_t = self.lstm_cell(states[i], (h_t, c_t))
-        
+            h_t, c_t = self.lstm_cell(states[:, i], (h_t, c_t))
+
         # Return logits over actions
-        return self.agent_out(h_t)
+        return self.q_values(h_t)
