@@ -1,10 +1,19 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from dataclasses import dataclass
 
 # class DataLoader:
 #     def __init__(self, args):
 #         self.args = args
+
+@dataclass
+class StockDataset:
+    train_df: pd.DataFrame
+    val_df: pd.DataFrame
+    test_df: pd.DataFrame
+    train_mean: float
+    train_std: float
 
 def load_data(data_filename, standardize=True):
     df = pd.read_csv(data_filename)
@@ -29,12 +38,12 @@ def load_data(data_filename, standardize=True):
         train_std = train_df["Adj Close"].std()
         print(train_mean)
         
-        train_df["Adj Close"] = (train_df["Adj Close"] - train_mean) / train_std
-        val_df["Adj Close"] = (val_df["Adj Close"] - train_mean) / train_std
-        test_df["Adj Close"] = (test_df["Adj Close"] - train_mean) / train_std
+        train_df.loc["Adj Close"] = (train_df["Adj Close"] - train_mean) / train_std
+        val_df.loc["Adj Close"] = (val_df["Adj Close"] - train_mean) / train_std
+        test_df.loc["Adj Close"] = (test_df["Adj Close"] - train_mean) / train_std
 
 
-    return train_df, val_df, test_df
+    return StockDataset(train_df, val_df, test_df, train_mean, train_std)
 
 
 def compute_macd(df):
