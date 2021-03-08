@@ -1,9 +1,13 @@
 import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
 
-data_filename = "data/MSFT.csv"
+# class DataLoader:
+#     def __init__(self, args):
+#         self.args = args
 
-def load_data(data_filename):
-    df = pd.read_csv(data_file)
+def load_data(data_filename, standardize=True):
+    df = pd.read_csv(data_filename)
 
     # Convert date to datetime
     df["Date"] = pd.to_datetime(df["Date"])
@@ -14,8 +18,56 @@ def load_data(data_filename):
     test_mask = (df["Date"] >= "2019-01-01") & (df["Date"] < "2020-01-01")
 
     # Split the data
-    train_data = df.loc[train_mask]
-    val_data = df.loc[val_mask]
-    test_data = df.loc[test_mask]
+    train_df = df.loc[train_mask]
+    val_df = df.loc[val_mask]
+    test_df = df.loc[test_mask]
 
-    return train_data, val_data, test_data
+
+    if standardize:
+        # Standardize adjusted closing prices based only on training date
+        train_mean = train_df["Adj Close"].mean()
+        train_std = train_df["Adj Close"].std()
+        print(train_mean)
+        
+        train_df["Adj Close"] = (train_df["Adj Close"] - train_mean) / train_std
+        val_df["Adj Close"] = (val_df["Adj Close"] - train_mean) / train_std
+        test_df["Adj Close"] = (test_df["Adj Close"] - train_mean) / train_std
+
+
+    return train_df, val_df, test_df
+
+
+def compute_macd(df):
+    """Compute the MACD and signal line.
+    
+    Returns:
+        MACD and signal line tuple
+    """
+    ema_12 = df["Adj Close"].ewm(span=12, adjust=False).mean()
+    ema_26 = df["Adj Close"].ewm(span=26, adjust=False).mean()
+    macd = ema_12 - ema_26
+
+    sig = macd.ewm(span=9, adjust=False).mean()
+    return macd, sig
+    # plt.plot(macd, label="MACD")
+    # plt.plot(sig, label="Signal Line")
+    # plt.legend(loc='upper left')
+    # plt.show()
+
+
+def window_data(data, window_size):
+    num_windows = len(data) - window_size + 1
+    windows = np.zeros((num_windows, window_size, data.shape[1]))
+    for i in range(len(data) - window_size + 1):
+        windows[i] = data[i:window_size+i]
+    return windows
+
+# def create_dataset(data_filename):
+#     train_df, val_df, test_df = load_data(data_filename)
+#     train_data = np.vstack((macd, sig, train_df["Adj Close"])).T
+
+# data_filename = "data/MSFT.csv"
+# train_df, val_df, test_df = load_data(data_filename)
+# compute_macd(val_df)
+#x = pd.plotting.autocorrelation_plot(test_df["Adj Close"])
+#plt.show()
