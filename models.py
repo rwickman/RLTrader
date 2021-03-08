@@ -18,6 +18,9 @@ class DDQNAgent:
         self._loss_fn = nn.SmoothL1Loss()
         self._num_steps = 0
         self._action_dim = self.args.max_trans * 2 + 1
+        self._model_file = os.path.join(self.args.save_dir, "dqn_model.pt")
+        if self.args.load:
+            self.load()
 
     def __call__(self, x):
         return self.get_action(self._dqn(x))
@@ -61,7 +64,6 @@ class DDQNAgent:
         
         # Select the q-value for every state
         actions = torch.tensor(actions, dtype=torch.int64).cuda()
-        print(actions.shape)
         q_values = self._dqn(states).gather(1, actions.unsqueeze(0))
 
         # Create TD targets
@@ -75,21 +77,29 @@ class DDQNAgent:
                 action, _ = self.get_action(q_next[i], True)
                 
                 # Set TD Target using the q-value of the target network
+                # This is the Double-DQN target
                 td_targets[i] = rewards[i] + self.args.gamma * q_next_target[i, action]
 
         # Train model
         self._optimizer.zero_grad()
-        print("q_values.shape", q_values.shape)
-        print("td_targets.shape", td_targets.shape)
         loss = self._loss_fn(q_values[0], td_targets)
         
         loss.backward()
         print(self._dqn.q_values.weight.grad.max())
+        print(loss)
         self._optimizer.step()
         self._num_steps += 1
+        return loss
 
     def update_target(self):
         self._dqn_target.load_state_dict(self._dqn.state_dict())
+
+    def save(self):
+        torch.save(self._dqn.state_dict(), self._model_file)
+
+    def load(self):
+        self._dqn.load_state_dict(torch.load(self._model_file))
+        self._dqn_target.load_state_dict(torch.load(self._model_file))
 
 class DQN(nn.Module):
     def __init__(self, args):
