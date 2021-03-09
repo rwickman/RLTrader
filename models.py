@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
 import os
 
@@ -22,8 +23,8 @@ class DDQNAgent:
         if self.args.load:
             self.load()
 
-    def __call__(self, x):
-        return self.get_action(self._dqn(x))
+    def __call__(self, x, argmax=False):
+        return self.get_action(self._dqn(x), argmax)
 
     def get_action(self, q_values, argmax=False):
         q_values = torch.squeeze(q_values)
@@ -78,8 +79,13 @@ class DDQNAgent:
                 
                 # Set TD Target using the q-value of the target network
                 # This is the Double-DQN target
+                # print("action", action, "q_next_target", q_next_target[i])
+                # print("q_next_target[i, action]", q_next_target[i, action])
                 td_targets[i] = rewards[i] + self.args.gamma * q_next_target[i, action]
 
+        print("rewards", rewards, "SUM REWARDS", sum(rewards))
+        print("q_values", q_values)
+        print("td_targets", td_targets)
         # Train model
         self._optimizer.zero_grad()
         loss = self._loss_fn(q_values[0], td_targets)
@@ -105,10 +111,11 @@ class DQN(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        
-        self.state_size = 5 
 
-        self.lstm_cell = nn.LSTMCell(self.state_size, self.args.hidden_size)
+        self.state_encoder_fc1 = nn.Linear(self.args.state_size, self.args.hidden_size)
+        self.state_encoder_fc2 = nn.Linear(self.args.hidden_size, self.args.hidden_size)
+
+        self.lstm_cell = nn.LSTMCell(self.args.hidden_size, self.args.hidden_size)
 
         # Action space is [-max_trans, max_trans]
         self.q_values = nn.Linear(self.args.hidden_size, self.args.max_trans * 2 + 1)
@@ -119,10 +126,14 @@ class DQN(nn.Module):
 
         batch_size = states.shape[0]
         # Hidden state and cell memory
+        
         h_t = torch.zeros(batch_size, self.args.hidden_size).cuda()
         c_t = torch.zeros(batch_size, self.args.hidden_size).cuda()
         for i in range(self.args.lstm_timesteps):
-            h_t, c_t = self.lstm_cell(states[:, i], (h_t, c_t))
+            enc_state = F.relu(self.state_encoder_fc1(states[:, i]))
+            enc_state = F.relu(self.state_encoder_fc2(enc_state))
+
+            h_t, c_t = self.lstm_cell(enc_state, (h_t, c_t))
 
         # Return logits over actions
         return self.q_values(h_t)
