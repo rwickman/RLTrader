@@ -36,11 +36,9 @@ def load_data(data_filename, standardize=True):
         # Standardize adjusted closing prices based only on training date
         train_mean = train_df["Adj Close"].mean()
         train_std = train_df["Adj Close"].std()
-        print(train_mean)
-        
-        train_df.loc["Adj Close"] = (train_df["Adj Close"] - train_mean) / train_std
-        val_df.loc["Adj Close"] = (val_df["Adj Close"] - train_mean) / train_std
-        test_df.loc["Adj Close"] = (test_df["Adj Close"] - train_mean) / train_std
+        train_df["Adj Close"] = (train_df["Adj Close"] - train_mean) / train_std
+        val_df["Adj Close"] = (val_df["Adj Close"] - train_mean) / train_std
+        test_df["Adj Close"] = (test_df["Adj Close"] - train_mean) / train_std
 
 
     return StockDataset(train_df, val_df, test_df, train_mean, train_std)

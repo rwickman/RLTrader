@@ -13,6 +13,7 @@ if __name__ == "__main__":
         help="Directory to save the models.")
     parser.add_argument("--hidden_size", type=int, default=256,
         help="Hidden size of LSTM of agent.")
+
     parser.add_argument("--batch_size", type=int, default=16,
         help="Batch size.")
     parser.add_argument("--max_trans", type=int, default=5,
@@ -31,8 +32,22 @@ if __name__ == "__main__":
         help="Maximum size of replay memory.")
     parser.add_argument("--lr", type=float, default=1e-3,
         help="Parameter learning rate.")
-    parser.add_argument("--init_balance", type=float, default=10000.0,
-        help="Initial balance.")
-    
+    parser.add_argument("--max_init_balance", type=float, default=10000.0,
+        help="Initial balance (also max if randomizing balance).")
+    parser.add_argument("--min_init_balance", type=float, default=100.0,
+        help="Minimum initial balance.")
+    parser.add_argument("--max_train_days", type=int, default=256,
+        help="The maximum amount of days to train the agent.")
+    parser.add_argument("--min_train_days", type=int, default=8,
+        help="The minimum amount of days to train the agent.")
+    parser.add_argument("--no_rand_balance", action="store_true",
+        help="Don't randomize the balance.")
+    parser.add_argument("--no_rand_start", action="store_true",
+        help="Don't randomize start training day.")
+    parser.add_argument("--no_rand_days", action="store_true",
+        help="Don't randomize the number of training day.")
+
+
+
 
     main(parser.parse_args())
