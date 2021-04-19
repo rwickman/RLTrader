@@ -58,7 +58,6 @@ class DDQNAgent:
 
     def train(self):
         is_ws, exs, indices = self._replay_memory.sample(self.args.batch_size)
-
         td_targets = torch.zeros(self.args.batch_size).cuda()
         states = torch.zeros(self.args.batch_size, self.args.lstm_timesteps, self.args.state_size).cuda()
         next_states = torch.zeros(self.args.batch_size, self.args.lstm_timesteps, self.args.state_size).cuda()
@@ -79,7 +78,7 @@ class DDQNAgent:
         
         # Select the q-value for every state
         actions = torch.tensor(actions, dtype=torch.int64).cuda()
-        q_values = self._dqn(states).gather(1, actions.unsqueeze(0))
+        q_values = self._dqn(states).gather(1, actions.unsqueeze(1)).squeeze(1)
 
         # Create TD targets
         q_next  = self._dqn(next_states)
@@ -99,8 +98,8 @@ class DDQNAgent:
         #print("q_values", q_values)
         #print("td_targets", td_targets)
         # Train model
-        self._optimizer.zero_grad()
-        td_errors = q_values[0] - td_targets
+        self._optimizer.zero_grad()        
+        td_errors = q_values - td_targets
         loss = torch.sum(td_errors ** 2  *  is_ws) #self._loss_fn(q_values[0], td_targets)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self._dqn.parameters(), self.args.grad_clip)
