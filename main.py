@@ -13,8 +13,7 @@ if __name__ == "__main__":
         help="Directory to save the models.")
     parser.add_argument("--hidden_size", type=int, default=256,
         help="Hidden size of LSTM of agent.")
-
-    parser.add_argument("--batch_size", type=int, default=16,
+    parser.add_argument("--batch_size", type=int, default=32,
         help="Batch size.")
     parser.add_argument("--max_trans", type=int, default=5,
         help="Max buy/sell transaction.")
@@ -30,7 +29,7 @@ if __name__ == "__main__":
         help="Gamma value used for future reward discount.")
     parser.add_argument("--capacity", type=int, default=100000,
         help="Maximum size of replay memory.")
-    parser.add_argument("--lr", type=float, default=1e-3,
+    parser.add_argument("--lr", type=float, default=1e-4,
         help="Parameter learning rate.")
     parser.add_argument("--max_init_balance", type=float, default=10000.0,
         help="Initial balance (also max if randomizing balance).")
@@ -46,8 +45,17 @@ if __name__ == "__main__":
         help="Don't randomize start training day.")
     parser.add_argument("--no_rand_days", action="store_true",
         help="Don't randomize the number of training day.")
+    parser.add_argument("--tgt_update", type=int, default=1,
+        help="Number of episode elapsed before target network is updated")
 
-
+    parser.add_argument("--eps", type=float, default=1e-6,
+        help="Epsilon used for proportional priority.")
+    parser.add_argument("--alpha", type=float, default=0.6,
+        help="Alpha used for proportional priority.")
+    parser.add_argument("--beta", type=float, default=0.4,
+        help="Beta used for proportional priority.")
+    parser.add_argument("--grad_clip", type=float, default=1.0,
+        help="Gradient clipping.")
 
 
     main(parser.parse_args())

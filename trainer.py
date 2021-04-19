@@ -49,15 +49,16 @@ class Trainer:
                 init_i = 0
 
             if ep_i + 1 == self.args.n_episodes:
+                #self._train_data = self._val_data
                 num_train_days = self.args.max_train_days
-                #init_i = 0#len(self._train_data) - num_train_days
+                init_i = len(self._train_data) - num_train_days
                 self.reset()
                 self._balance = torch.tensor([self.args.max_init_balance])
                 self._num_stock = torch.zeros(1)
             
             state = self.setup_init_state(init_i=init_i)
             for i in range(num_train_days):
-                #print(state)
+                #print("state", state)
                 #cur_close_idx = i + self.args.lstm_timesteps - 1
                 action, q_value = self._agent_trader(state, argmax=ep_i + 1 == self.args.n_episodes)
 
@@ -65,10 +66,10 @@ class Trainer:
                 num_trans = action - self.args.max_trans
                 cur_close_price = self._unstandardize_price(self._train_data[init_i+i][-1])
                 pre_trans_balance = self._balance.clone()
-                print("q_value", q_value)
-                print("BEFORE", num_trans, cur_close_price, self._num_stock, self._balance)
+                # print("q_value", q_value, "action", action)
+                # print("BEFORE", num_trans, cur_close_price, self._num_stock, self._balance)
                 self._transaction(num_trans, cur_close_price)
-                print("AFTER", num_trans, cur_close_price, self._num_stock, self._balance, "\n")
+
 
                 # Create next state
                 next_state = state.clone()
@@ -81,6 +82,7 @@ class Trainer:
                 # Create experience
                 #print(pre_trans_balance, self._balance)
                 reward = torch.log(self._balance / pre_trans_balance)
+                #print("AFTER", num_trans, cur_close_price, self._num_stock, self._balance, "reward", reward, "\n")
                 e_t = Experience(state, action, reward, next_state)
                 self._agent_trader.add_ex(e_t)
 
@@ -91,13 +93,19 @@ class Trainer:
                 # Update state
                 state = next_state
 
-                if (i+1) % self.args.batch_size == 0 and ep_i + 1 < self.args.n_episodes:
-                    print("TRAINING")
+            if self._agent_trader.replay_len() >= self.args.batch_size and ep_i + 1 < self.args.n_episodes:
+                print("TRAINING")
+                for i in range(4):
                     loss = self._agent_trader.train()
                     losses.append(loss)
-            
+                
+                # Save DQN model
+                self._agent_trader.save()
+
             # Update the target network
-            self._agent_trader.update_target()
+            if (ep_i +1) % self.args.tgt_update == 0:
+                print("UPDATING TARGET")
+                self._agent_trader.update_target()
         
         # Sell all the rest of your stock
         cur_close_price = self._unstandardize_price(self._train_data[init_i + i][-1])
@@ -138,7 +146,6 @@ class Trainer:
         elif num_trans > 0:
             # Can only buy a maximum based on account balance
             max_purchase = self._balance//cur_close_price
-            print("max_purchase", max_purchase) 
             cur_buy = min(max_purchase, num_trans)
             cost_of_purchase = cur_buy * cur_close_price
 
@@ -154,13 +161,15 @@ class Trainer:
     def reset(self):
         if not self.args.no_rand_balance:
             init_balance = float(np.random.randint(self.args.min_init_balance, self.args.max_init_balance))
-        
+        else:
+            init_balance = self.args.max_init_balance
+
         self._balance = torch.tensor([init_balance])
         self._num_stock = torch.zeros(1)
 
     
     def setup_init_state(self, init_i=0):
-        balance = torch.repeat_interleave(torch.log(self._balance), self.args.lstm_timesteps).reshape(self.args.lstm_timesteps, 1)
+        balance = torch.repeat_interleave(torch.log(self._balance+1), self.args.lstm_timesteps).reshape(self.args.lstm_timesteps, 1)
         cur_stock = torch.zeros((self.args.lstm_timesteps,1))
         stock_data = torch.zeros((self.args.lstm_timesteps, 3))
         stock_data[-1] = self._train_data[init_i]
