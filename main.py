@@ -45,6 +45,8 @@ if __name__ == "__main__":
         help="Don't randomize start training day.")
     parser.add_argument("--no_rand_days", action="store_true",
         help="Don't randomize the number of training day.")
+    parser.add_argument("--no_rand_scale_price", action="store_true",
+        help="Don't randomize the scale of the price.")
     parser.add_argument("--tgt_update", type=int, default=1,
         help="Number of episode elapsed before target network is updated")
 
@@ -56,6 +58,11 @@ if __name__ == "__main__":
         help="Beta used for proportional priority.")
     parser.add_argument("--grad_clip", type=float, default=1.0,
         help="Gradient clipping.")
-
+    parser.add_argument("--train_dict", default="models/train_dict.json",
+        help="Train JSON dictionary.")
+    parser.add_argument("--val_period", type=int, default=50,
+        help="How often to run validation episode.")
+    parser.add_argument("--run_test", action="store_true",
+        help="Don't train and only test on testing set.")
 
     main(parser.parse_args())
