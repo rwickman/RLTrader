@@ -23,6 +23,8 @@ class DDQNAgent:
         self._num_steps = 0
         self._action_dim = self.args.max_trans * 2 + 1
         self._model_file = os.path.join(self.args.save_dir, "dqn_model.pt")
+        if not os.path.exists("models"):
+            os.mkdir("models")
         if self.args.load:
             self.load()
 
@@ -100,7 +102,7 @@ class DDQNAgent:
         # Train model
         self._optimizer.zero_grad()        
         td_errors = q_values - td_targets
-        loss = torch.sum(td_errors ** 2  *  is_ws) #self._loss_fn(q_values[0], td_targets)
+        loss = torch.mean(td_errors ** 2  *  is_ws) #self._loss_fn(q_values[0], td_targets)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self._dqn.parameters(), self.args.grad_clip)
         #print("GRAD MAX", self._dqn.q_values.weight.grad.max())
@@ -121,6 +123,8 @@ class DDQNAgent:
             "DQN" : self._dqn.state_dict(),
             "optimizer" : self._optimizer.state_dict() 
         }
+        
+
         torch.save(model_dict, self._model_file)
 
     def load(self):

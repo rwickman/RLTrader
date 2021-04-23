@@ -38,16 +38,26 @@ class Trainer:
         
         # print(init_state.shape)
         losses = []
+        
+        if self.args.run_test:
+            self.args.n_episodes = 1
+
         for ep_i in range(self.args.n_episodes):
             print("EPISODE", ep_i)
             self._train_dict["num_episodes"] += 1
             self.reset()
             
+            
             is_val_ep = (ep_i + 1) % self.args.val_period == 0 
-            if is_val_ep:
+            if is_val_ep or self.args.run_test:
                 final_balance = []
                 final_actions = []
-                data = self._val_data
+        
+                if is_val_ep:
+                    data = self._val_data
+                else:
+                    data = self._test_data
+        
                 num_train_days = len(data)#min(self.args.max_train_days, len(data))
                 init_i = 0#len(data) - num_train_days
                 self.reset()
@@ -88,7 +98,7 @@ class Trainer:
             for i in range(num_train_days):
                 #print("state", state)
                 #cur_close_idx = i + self.args.lstm_timesteps - 1
-                action, q_value = self._agent_trader(state, argmax=is_val_ep)
+                action, q_value = self._agent_trader(state, argmax=is_val_ep or self.args.run_test)
 
                 # Convert action to [-max_trans, max_trans]
                 num_trans = action - self.args.max_trans
@@ -97,7 +107,6 @@ class Trainer:
                 #print("q_value", q_value, "action", action)
                 #rint("BEFORE", num_trans, cur_close_price, self._num_stock, self._balance)
                 self._transaction(num_trans, cur_close_price)
-
 
                 # Create next state
                 next_state = state.clone()
@@ -113,7 +122,7 @@ class Trainer:
                 #print("AFTER", num_trans, cur_close_price, self._num_stock, self._balance, "reward", reward, "\n")
                 
                 # Create experience
-                if not is_val_ep:
+                if not is_val_ep and not self.args.run_test:
                     e_t = Experience(state, action, reward, next_state)
                     self._agent_trader.add_ex(e_t)
                 else:
@@ -124,14 +133,14 @@ class Trainer:
                 # Update state
                 state = next_state
 
-            if not is_val_ep:
+            if not is_val_ep and not self.args.run_test:
                 if self._agent_trader.replay_len() >= self.args.batch_size:
                     print("TRAINING")
                     cur_losses = []
                     for i in range(4):
                         loss = self._agent_trader.train()                        
                         cur_losses.append(float(loss))
-                        losses.append(loss)
+                    losses.append(sum(cur_losses)/len(cur_losses))
                     self._train_dict["train_losses"].append(cur_losses)
                     # Save DQN model
                     self._agent_trader.save()
@@ -139,12 +148,13 @@ class Trainer:
                 print("VAL EP")
                 # Sell all the rest of your stock
                 cur_close_price = self._unstandardize_price(data[init_i + i][-1])
-                print(data[i][-1], cur_close_price, self._num_stock)
                 self._transaction(-self._num_stock, cur_close_price)
                 final_balance.append(self._balance.numpy()[0])
+                print(data[i][-1], cur_close_price, self._num_stock, self._balance.numpy()[0])
                 self._train_dict["val_balance"].append(float(final_balance[-1]))
 
-            self.save()
+            if not self.args.run_test:
+                self.save()
 
 
             # Update the target network
@@ -216,9 +226,9 @@ class Trainer:
         state = torch.hstack(
             (stock_data, balance, cur_stock)).cuda().float().unsqueeze(0)
 
-        cur_stock = torch.zeros((self.args.lstm_timesteps,1))
-        stock_data = torch.zeros((self.args.lstm_timesteps, 3))
-        state = torch.hstack((stock_data, balance, cur_stock)).cuda().float().unsqueeze(0)
+        # cur_stock = torch.zeros((self.args.lstm_timesteps,1))
+        # stock_data = torch.zeros((self.args.lstm_timesteps, 3))
+        # state = torch.hstack((stock_data, balance, cur_stock)).cuda().float().unsqueeze(0)
         return state
 
     def load(self):
