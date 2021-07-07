@@ -46,7 +46,7 @@ class DDQNAgent:
     def add_ex(self, e_t):
         """Add a step of experience."""
         with torch.no_grad():
-            _, q_value = self.get_action(self._dqn(e_t.state))
+            q_value = self._dqn(e_t.state)[0][e_t.action]
             if e_t.next_state is not None:
                 next_action, _ = self.get_action(self._dqn(e_t.next_state))
                 q_next_target = self._dqn_target(e_t.next_state)[0, next_action]
